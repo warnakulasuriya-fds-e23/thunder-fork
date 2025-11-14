@@ -20,8 +20,11 @@ package notification
 
 import (
 	"errors"
+	"os"
+	"path/filepath"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/suite"
 
 	"github.com/asgardeo/thunder/internal/notification/common"
@@ -38,8 +41,19 @@ func TestUtilsTestSuite(t *testing.T) {
 }
 
 func (suite *UtilsTestSuite) SetupSuite() {
-	testConfig := &config.Config{}
-	err := config.InitializeThunderRuntime("", testConfig)
+	tempDir := suite.T().TempDir()
+	cryptoFile := filepath.Join(tempDir, "crypto.key")
+	dummyCryptoKey := "0579f866ac7c9273580d0ff163fa01a7b2401a7ff3ddc3e3b14ae3136fa6025e"
+
+	err := os.WriteFile(cryptoFile, []byte(dummyCryptoKey), 0600)
+	assert.NoError(suite.T(), err)
+
+	testConfig := &config.Config{
+		Security: config.SecurityConfig{
+			CryptoFile: cryptoFile,
+		},
+	}
+	err = config.InitializeThunderRuntime("", testConfig)
 	if err != nil {
 		suite.T().Fatalf("Failed to initialize ThunderRuntime: %v", err)
 	}

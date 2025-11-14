@@ -1,6 +1,17 @@
 {
     "version": "0.2.0",
     "configurations": [
+        {
+            "name": "Launch test function",
+            "type": "go",
+            "request": "launch",
+            "mode": "test",
+            "program": "${workspaceFolder}/backend/internal/notification/client_provider_test.go",
+            "args": [
+                "-test.run",
+                "TestClientProviderTestSuite"
+            ]
+        },
 
         {
             "name": "Connect to server",
