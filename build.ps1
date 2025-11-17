@@ -1049,45 +1049,70 @@ function Ensure-Crypto-File {
         Write-Host "Default crypto key file not found. Generating new key at $KEY_FILE..."
         $NEW_KEY = $null
         
-        # --- START: OpenSSL-first logic ---
-        # Try OpenSSL first, just like Ensure-Certificates
+        # Try generating key using OpenSSL first
         $openssl = Get-Command openssl -ErrorAction SilentlyContinue
         if ($openssl) {
             try {
                 Write-Host " - Using OpenSSL to generate key..."
                 # openssl rand -hex 32 returns a 64-char string.
-                # Use Out-String | Trim to capture it cleanly.
                 $NEW_KEY = (openssl rand -hex 32 | Out-String).Trim()
                 
-                if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrEmpty($NEW_KEY)) {
-                    throw "OpenSSL rand command failed or returned empty."
+                if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrEmpty($NEW_KEY) -or $NEW_KEY.Length -ne 64) {
+                    throw "OpenSSL rand command failed or returned empty/incorrect length."
                 }
             }
             catch {
-                Write-Host " - OpenSSL failed: $_. Falling back to .NET cryptography."
+                Write-Host " - OpenSSL failed: $_. Falling back to POSIX tools/DOTNET."
                 $NEW_KEY = $null
             }
         }
         else {
-            Write-Host " - OpenSSL not found. Falling back to .NET cryptography."
+            Write-Host " - OpenSSL not found. Falling back to POSIX tools/DOTNET."
         }
-        # --- END: OpenSSL-first logic ---
 
-        # Fallback to .NET if OpenSSL fails or isn't present
+        # Try POSIX tools as first fallback option
+        if ([string]::IsNullOrEmpty($NEW_KEY)) {
+            $bash = Get-Command bash -ErrorAction SilentlyContinue
+            if ($bash -and (Test-Path /dev/urandom)) {
+                try {
+                    Write-Host " - Using POSIX tools (/dev/urandom) to generate key..."
+                    # Command: head -c 32 /dev/urandom | xxd -p -c 256
+                    # Generates 32 random bytes, converts to a single line of hex (64 chars)
+                    # The ToLower() ensures consistency with the openssl/dotnet output.
+                    $POS_KEY_RAW = (& bash -c 'head -c 32 /dev/urandom | xxd -p -c 256' | Out-String).Trim()
+                    $NEW_KEY = $POS_KEY_RAW.ToLower()
+                    
+                    if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrEmpty($NEW_KEY) -or $NEW_KEY.Length -ne 64) {
+                         throw "POSIX key generation command failed or returned invalid length."
+                    }
+                }
+                catch {
+                    Write-Host " - POSIX tool failed: $_. Falling back to .NET cryptography."
+                    $NEW_KEY = $null
+                }
+            }
+            else {
+                Write-Host " - POSIX tools not found or not suitable. Falling back to .NET cryptography."
+            }
+        }
+
+        # try .NET cryptography as final fallback
         if ([string]::IsNullOrEmpty($NEW_KEY)) {
             try {
                 Write-Host " - Using .NET cryptography to generate key..."
                 $bytes = New-Object byte[] 32
+                # Note: System.Security.Cryptography.RandomNumberGenerator is available in both .NET Framework and .NET (Core)
                 $rng = [System.Security.Cryptography.RandomNumberGenerator]::Create()
                 $rng.GetBytes($bytes)
                 $rng.Dispose()
-                # Convert bytes to lowercase hex string to match 'openssl rand -hex'
+                # Convert bytes to lowercase hex string (64 chars)
                 $NEW_KEY = ([System.BitConverter]::ToString($bytes) -replace '-', '').ToLower()
             }
             catch {
                  throw "Failed to generate crypto key using .NET: $_"
             }
         }
+        # --- END: .NET cryptography fallback ---
         
         # Ensure the target directory exists
         New-Item -Path $KEY_DIR -ItemType Directory -Force | Out-Null
