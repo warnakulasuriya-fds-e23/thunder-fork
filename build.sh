@@ -296,7 +296,7 @@ function prepare_backend_for_packaging() {
     echo "================================================================"
 
     echo "=== Ensuring crypto file exists in the distribution ==="
-    ensure_crypto_file "$DIST_DIR/$PRODUCT_FOLDER/repository/conf"
+    ensure_crypto_file "$DIST_DIR/$PRODUCT_FOLDER/$SECURITY_DIR"
     echo "================================================================"
 }
 
@@ -636,13 +636,12 @@ function ensure_certificates() {
 }
 
 function ensure_crypto_file() {
-    local CONF_DIR="$1"
-    local DEPLOYMENT_FILE="$CONF_DIR/deployment.yaml"
+    local KEY_DIR="$1"
+    local DEPLOYMENT_FILE="$KEY_DIR/../../conf/deployment.yaml"
     
     # Define the default path for the key file
-    local KEY_DIR="$CONF_DIR/../resources/security"
     local KEY_FILE="$KEY_DIR/crypto.key"
-    local KEY_PATH_IN_YAML="repository/resources/security/crypto.key"
+    local KEY_PATH_IN_YAML="$SECURITY_DIR/crypto.key"
 
     echo "=== Ensuring crypto key file exists in the distribution ==="
 
@@ -797,7 +796,7 @@ function run_backend() {
     echo "=== Ensuring sample app certificates exist ==="
     ensure_certificates "$SAMPLE_APP_DIR"
 
-    ensure_crypto_file "$BACKEND_DIR/repository/conf"
+    ensure_crypto_file "$BACKEND_DIR/$SECURITY_DIR"
 
     echo "Initializing databases..."
     initialize_databases
