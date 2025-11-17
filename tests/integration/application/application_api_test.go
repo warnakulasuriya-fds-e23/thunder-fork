@@ -225,7 +225,8 @@ func (ts *ApplicationAPITestSuite) TestApplicationListing() {
 			if app.ID == expectedApp.ID &&
 				app.Name == expectedApp.Name &&
 				app.Description == expectedApp.Description &&
-				app.ClientID == expectedApp.ClientID {
+				app.ClientID == expectedApp.ClientID &&
+				app.LogoURL == expectedApp.LogoURL {
 				found = true
 				break
 			}
@@ -233,6 +234,146 @@ func (ts *ApplicationAPITestSuite) TestApplicationListing() {
 		if !found {
 			ts.T().Fatalf("Test application not found in list: %+v", expectedApp)
 		}
+	}
+}
+
+// Test application listing with logo_url field validation
+func (ts *ApplicationAPITestSuite) TestApplicationListingWithLogoURL() {
+	// Create two applications: one with logo_url and one without
+	appWithLogo := Application{
+		Name:                      "App With Logo",
+		Description:               "Application with logo URL",
+		IsRegistrationFlowEnabled: false,
+		AuthFlowGraphID:           "auth_flow_config_basic",
+		RegistrationFlowGraphID:   "registration_flow_config_basic",
+		URL:                       "https://appwithlogo.example.com",
+		LogoURL:                   "https://appwithlogo.example.com/logo.png",
+		Certificate: &ApplicationCert{
+			Type:  "NONE",
+			Value: "",
+		},
+		InboundAuthConfig: []InboundAuthConfig{
+			{
+				Type: "oauth2",
+				OAuthAppConfig: &OAuthAppConfig{
+					ClientID:                "app_with_logo_client",
+					ClientSecret:            "app_with_logo_secret",
+					RedirectURIs:            []string{"http://localhost/appwithlogo/callback"},
+					GrantTypes:              []string{"authorization_code"},
+					ResponseTypes:           []string{"code"},
+					TokenEndpointAuthMethod: "client_secret_basic",
+					PKCERequired:            false,
+					PublicClient:            false,
+				},
+			},
+		},
+	}
+
+	appWithoutLogo := Application{
+		Name:                      "App Without Logo",
+		Description:               "Application without logo URL",
+		IsRegistrationFlowEnabled: false,
+		AuthFlowGraphID:           "auth_flow_config_basic",
+		RegistrationFlowGraphID:   "registration_flow_config_basic",
+		URL:                       "https://appwithoutlogo.example.com",
+		Certificate: &ApplicationCert{
+			Type:  "NONE",
+			Value: "",
+		},
+		InboundAuthConfig: []InboundAuthConfig{
+			{
+				Type: "oauth2",
+				OAuthAppConfig: &OAuthAppConfig{
+					ClientID:                "app_without_logo_client",
+					ClientSecret:            "app_without_logo_secret",
+					RedirectURIs:            []string{"http://localhost/appwithoutlogo/callback"},
+					GrantTypes:              []string{"authorization_code"},
+					ResponseTypes:           []string{"code"},
+					TokenEndpointAuthMethod: "client_secret_basic",
+					PKCERequired:            false,
+					PublicClient:            false,
+				},
+			},
+		},
+	}
+
+	// Create both applications
+	appID1, err := createApplication(appWithLogo)
+	if err != nil {
+		ts.T().Fatalf("Failed to create application with logo: %v", err)
+	}
+	defer func() {
+		if err := deleteApplication(appID1); err != nil {
+			ts.T().Logf("Failed to delete application with logo: %v", err)
+		}
+	}()
+
+	appID2, err := createApplication(appWithoutLogo)
+	if err != nil {
+		ts.T().Fatalf("Failed to create application without logo: %v", err)
+	}
+	defer func() {
+		if err := deleteApplication(appID2); err != nil {
+			ts.T().Logf("Failed to delete application without logo: %v", err)
+		}
+	}()
+
+	// List applications
+	req, err := http.NewRequest("GET", testServerURL+"/applications", nil)
+	if err != nil {
+		ts.T().Fatalf("Failed to create request: %v", err)
+	}
+
+	client := &http.Client{
+		Transport: &http.Transport{
+			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+		},
+	}
+
+	resp, err := client.Do(req)
+	if err != nil {
+		ts.T().Fatalf("Failed to send request: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		ts.T().Fatalf("Expected status 200, got %d", resp.StatusCode)
+	}
+
+	var appList ApplicationList
+	err = json.NewDecoder(resp.Body).Decode(&appList)
+	if err != nil {
+		ts.T().Fatalf("Failed to parse response body: %v", err)
+	}
+
+	// Verify app with logo has logo_url field populated
+	foundWithLogo := false
+	for _, app := range appList.Applications {
+		if app.ID == appID1 {
+			foundWithLogo = true
+			if app.LogoURL != appWithLogo.LogoURL {
+				ts.T().Errorf("Expected logo_url %s, got %s", appWithLogo.LogoURL, app.LogoURL)
+			}
+			break
+		}
+	}
+	if !foundWithLogo {
+		ts.T().Fatalf("Application with logo not found in list")
+	}
+
+	// Verify app without logo has empty logo_url field
+	foundWithoutLogo := false
+	for _, app := range appList.Applications {
+		if app.ID == appID2 {
+			foundWithoutLogo = true
+			if app.LogoURL != "" {
+				ts.T().Errorf("Expected empty logo_url, got %s", app.LogoURL)
+			}
+			break
+		}
+	}
+	if !foundWithoutLogo {
+		ts.T().Fatalf("Application without logo not found in list")
 	}
 }
 
@@ -1215,8 +1356,7 @@ func (ts *ApplicationAPITestSuite) TestApplicationWithTokenConfiguration() {
 					Scopes:                  []string{"openid", "profile"},
 					Token: &OAuthTokenConfig{
 						Issuer: "https://tokenconfig.example.com",
-						AccessToken: &TokenConfig{
-							Issuer:         "https://tokenconfig.example.com",
+						AccessToken: &AccessTokenConfig{
 							ValidityPeriod: 3600,
 							UserAttributes: []string{"email", "username"},
 						},
@@ -1311,7 +1451,7 @@ func (ts *ApplicationAPITestSuite) TestApplicationUpdateWithTokenConfigChanges()
 					TokenEndpointAuthMethod: "client_secret_basic",
 					Scopes:                  []string{"openid"},
 					Token: &OAuthTokenConfig{
-						AccessToken: &TokenConfig{
+						AccessToken: &AccessTokenConfig{
 							ValidityPeriod: 1800,
 						},
 					},
@@ -1327,8 +1467,7 @@ func (ts *ApplicationAPITestSuite) TestApplicationUpdateWithTokenConfigChanges()
 	// Update with more complex token config
 	app.InboundAuthConfig[0].OAuthAppConfig.Token = &OAuthTokenConfig{
 		Issuer: "https://tokenconfigupdate.example.com",
-		AccessToken: &TokenConfig{
-			Issuer:         "https://tokenconfigupdate.example.com",
+		AccessToken: &AccessTokenConfig{
 			ValidityPeriod: 7200,
 			UserAttributes: []string{"email", "username", "role"},
 		},
@@ -1569,8 +1708,7 @@ func (ts *ApplicationAPITestSuite) TestApplicationWithOnlyAccessToken() {
 					Scopes:                  []string{"api.read", "api.write"},
 					Token: &OAuthTokenConfig{
 						Issuer: "https://accesstokenonly.example.com",
-						AccessToken: &TokenConfig{
-							Issuer:         "https://accesstokenonly.example.com",
+						AccessToken: &AccessTokenConfig{
 							ValidityPeriod: 7200,
 							UserAttributes: []string{"email", "username", "role", "department"},
 						},
@@ -1657,8 +1795,7 @@ func (ts *ApplicationAPITestSuite) TestApplicationWithBothTokenTypes() {
 					Scopes:                  []string{"openid", "profile", "email"},
 					Token: &OAuthTokenConfig{
 						Issuer: "https://bothtokens.example.com",
-						AccessToken: &TokenConfig{
-							Issuer:         "https://bothtokens.example.com",
+						AccessToken: &AccessTokenConfig{
 							ValidityPeriod: 5400,
 							UserAttributes: []string{"email", "username"},
 						},
@@ -1800,7 +1937,7 @@ func (ts *ApplicationAPITestSuite) TestApplicationWithEmptyTokenIssuer() {
 					Scopes:                  []string{"openid"},
 					Token: &OAuthTokenConfig{
 						// Empty Issuer
-						AccessToken: &TokenConfig{
+						AccessToken: &AccessTokenConfig{
 							ValidityPeriod: 3600,
 						},
 					},
@@ -2193,8 +2330,7 @@ func (ts *ApplicationAPITestSuite) TestApplicationWithCompleteMetadata() {
 					Scopes:                  []string{"openid", "profile", "email"},
 					Token: &OAuthTokenConfig{
 						Issuer: "https://oauth-issuer.example.com",
-						AccessToken: &TokenConfig{
-							Issuer:         "https://oauth-issuer.example.com",
+						AccessToken: &AccessTokenConfig{
 							ValidityPeriod: 3600,
 							UserAttributes: []string{"sub", "email"},
 						},
