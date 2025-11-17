@@ -124,11 +124,6 @@ type FlowConfig struct {
 	Authn          FlowAuthnConfig `yaml:"authn" json:"authn"`
 }
 
-// CryptoConfig holds the cryptographic configuration details.
-type CryptoConfig struct {
-	Key string `yaml:"key" json:"key"`
-}
-
 // CORSConfig holds the configuration details for the CORS.
 type CORSConfig struct {
 	AllowedOrigins []string `yaml:"allowed_origins" json:"allowed_origins"`
