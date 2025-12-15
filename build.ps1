@@ -17,6 +17,7 @@
 # under the License.
 # ----------------------------------------------------------------------------
 
+
 [CmdletBinding()]
 param(
     [Parameter(Position = 0)]
@@ -28,6 +29,22 @@ param(
     [Parameter(Position = 2)]
     [string]$GO_ARCH
 )
+
+# Check for PowerShell Version Compatibility
+if ($PSVersionTable.PSVersion.Major -lt 7) {
+    Write-Host ""
+    Write-Host "================================================================" -ForegroundColor Red
+    Write-Host " [ERROR] UNSUPPORTED POWERSHELL VERSION" -ForegroundColor Red
+    Write-Host "================================================================" -ForegroundColor Red
+    Write-Host ""
+    Write-Host " You are currently running PowerShell $($PSVersionTable.PSVersion.ToString())" -ForegroundColor Yellow
+    Write-Host " Thunder requires PowerShell 7 (Core) or later." -ForegroundColor Yellow
+    Write-Host ""
+    Write-Host " Please install the latest version from:"
+    Write-Host " https://github.com/PowerShell/PowerShell" -ForegroundColor Cyan
+    Write-Host ""
+    exit 1
+}
 
 $ErrorActionPreference = "Stop"
 
@@ -182,7 +199,7 @@ function Read-Config {
             $content = Get-Content $CONFIG_FILE -Raw
             
             # Try to extract hostname
-            if ($content -match 'hostname:\s*["\']?([^"\'\n]+)["\']?') {
+            if ($content -match 'hostname:\s*["'']?([^"''\n]+)["'']?') {
                 $script:HOSTNAME = $matches[1].Trim()
             }
             else {
@@ -206,7 +223,7 @@ function Read-Config {
             }
             
             # Try to extract public_hostname
-            if ($content -match 'public_hostname:\s*["\']?([^"\'\n]+)["\']?') {
+            if ($content -match 'public_hostname:\s*["'']?([^"''\n]+)["'']?') {
                 $script:PUBLIC_HOSTNAME = $matches[1].Trim()
             }
             else {
