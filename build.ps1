@@ -149,7 +149,7 @@ $REACT_SDK_SAMPLE_APP_VERSION = $reactSdkPackageJson.version
 $REACT_SDK_SAMPLE_APP_FOLDER = "sample-app-react-sdk-${REACT_SDK_SAMPLE_APP_VERSION}-${SAMPLE_PACKAGE_OS}-${SAMPLE_PACKAGE_ARCH}"
 
 # Directories
-$TARGET_DIR = "target"
+$TARGET_DIR = Join-Path $SCRIPT_DIR "target"
 $OUTPUT_DIR = Join-Path $TARGET_DIR "out"
 $DIST_DIR = Join-Path $TARGET_DIR "dist"
 $BUILD_DIR = Join-Path $OUTPUT_DIR ".build"
@@ -359,7 +359,7 @@ function Build-Backend {
 
     # Construct ldflags safely and pass as an argument array to avoid PowerShell splitting
     $ldflags = "-X main.version=$VERSION -X main.buildDate=$buildDate"
-    $outputPath = "../$BUILD_DIR/$output_binary"
+    $outputPath = Join-Path $BUILD_DIR $output_binary
     $buildArgs += @('-ldflags', $ldflags, '-o', $outputPath, './cmd/server')
 
     Write-Host "Executing: go $($buildArgs -join ' ')"
